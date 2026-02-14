@@ -1,0 +1,474 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Water Grid - Dashboard</title>
+    <!-- MQTT.js via CDN -->
+    <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2196F3;
+            --secondary: #03A9F4;
+            --bg: #121212;
+            --surface: #1E1E1E;
+            --text: #ffffff;
+            --success: #4CAF50;
+            --warning: #FFC107;
+            --danger: #F44336;
+            --card-radius: 12px;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            width: 100%;
+            max-width: 1200px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #333;
+        }
+
+        h1 { margin: 0; font-weight: 300; letter-spacing: 1px; }
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            background: #333;
+            color: #aaa;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #666; }
+        .connected .status-dot { background: var(--success); box-shadow: 0 0 8px var(--success); }
+        .connected { color: var(--success); background: rgba(76, 175, 80, 0.1); }
+
+        /* Grid Layout */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+        }
+
+        /* Node Card */
+        .card {
+            background: var(--surface);
+            border-radius: var(--card-radius);
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            border: 1px solid #333;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 8px 12px rgba(0,0,0,0.4); }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .node-title { font-size: 1.5rem; font-weight: 500; color: var(--primary); }
+        .node-state { 
+            font-size: 0.8rem; font-weight: 700; text-transform: uppercase; 
+            padding: 4px 8px; border-radius: 4px; background: #333; color: #aaa;
+        }
+
+        /* Gauge */
+        .gauge-container {
+            position: relative;
+            height: 200px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #444;
+            margin-bottom: 20px;
+        }
+        .water-level {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 0%;
+            background: linear-gradient(to top, var(--primary), var(--secondary));
+            transition: height 0.5s ease-out;
+            opacity: 0.8;
+        }
+        .water-overlay {
+            position: absolute; inset: 0;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                rgba(255,255,255,0.03) 10px,
+                rgba(255,255,255,0.03) 20px
+            );
+        }
+        .level-text {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2.5rem; font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            z-index: 2;
+        }
+
+        /* Metrics */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .metric {
+            background: rgba(255,255,255,0.03);
+            padding: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .metric-label { font-size: 0.8rem; color: #888; }
+        .metric-val { font-weight: 500; font-size: 0.9rem; }
+
+        /* Pump Status */
+        .pump-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .pump-led {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: #444;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+        }
+        .pump-on { background: var(--success); box-shadow: 0 0 6px var(--success); }
+        .pump-fault { background: var(--danger); box-shadow: 0 0 8px var(--danger); animation: blink 1s infinite; }
+
+        @keyframes blink { 50% { opacity: 0.4; } }
+
+        /* Event Log */
+        .log-panel {
+            grid-column: 1 / -1;
+            max-height: 300px;
+            display: flex;
+            flex-direction: column;
+        }
+        .log-container {
+            flex: 1;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #0f0;
+            overflow-y: auto;
+            max-height: 200px;
+        }
+        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #111; padding-bottom: 2px; }
+        .log-ts { color: #666; margin-right: 8px; }
+        .log-topic { color: var(--secondary); margin-right: 8px; }
+
+        /* Alerts */
+        .alert-banner {
+            position: absolute; top: 0; left: 0; right: 0;
+            background: rgba(244, 67, 54, 0.9);
+            color: white; text-align: center; padding: 5px;
+            font-weight: bold; font-size: 0.8rem;
+            transform: translateY(-100%); transition: transform 0.3s;
+        }
+        .card.fault .alert-banner { transform: translateY(0); }
+        .card.fault { border-color: var(--danger); }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Smart Water Grid <span style="font-weight:500;color:var(--secondary)">Dashboard</span></h1>
+        <div id="connStatus" class="status-badge">
+            <div class="status-dot"></div> <span id="connText">Connecting...</span>
+        </div>
+    </header>
+
+    <div class="dashboard-grid">
+        
+        <!-- Node A Card -->
+        <div class="card" id="cardA">
+            <div class="alert-banner">CRITICAL FAULT: DRY RUN</div>
+            <div class="card-header">
+                <div class="node-title">Node A</div>
+                <div class="node-state" id="stateA">UNKNOWN</div>
+            </div>
+            
+            <div class="gauge-container">
+                <div class="water-level" id="fillA"></div>
+                <div class="water-overlay"></div>
+                <div class="level-text"><span id="lvlA">--</span>%</div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric">
+                    <span class="metric-label">Main Pump</span>
+                    <div class="pump-status">
+                        <span id="p1A_led" class="pump-led"></span>
+                        <span id="p1A_txt" class="metric-val">OFF</span>
+                    </div>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Backup Pump</span>
+                    <div class="pump-status">
+                        <span id="p2A_led" class="pump-led"></span>
+                        <span id="p2A_txt" class="metric-val">OFF</span>
+                    </div>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Current</span>
+                    <span id="curA" class="metric-val">-- mA</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Last Update</span>
+                    <span id="lastA" class="metric-val">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Node B Card -->
+        <div class="card" id="cardB">
+            <div class="alert-banner">CRITICAL FAULT: DRY RUN</div>
+            <div class="card-header">
+                <div class="node-title">Node B</div>
+                <div class="node-state" id="stateB">UNKNOWN</div>
+            </div>
+            
+            <div class="gauge-container">
+                <div class="water-level" id="fillB"></div>
+                <div class="water-overlay"></div>
+                <div class="level-text"><span id="lvlB">--</span>%</div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric">
+                    <span class="metric-label">Main Pump</span>
+                    <div class="pump-status">
+                        <span id="p1B_led" class="pump-led"></span>
+                        <span id="p1B_txt" class="metric-val">OFF</span>
+                    </div>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Backup Pump</span>
+                    <div class="pump-status">
+                        <span id="p2B_led" class="pump-led"></span>
+                        <span id="p2B_txt" class="metric-val">OFF</span>
+                    </div>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Current</span>
+                    <span id="curB" class="metric-val">-- mA</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Last Update</span>
+                    <span id="lastB" class="metric-val">--</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Log -->
+        <div class="card log-panel">
+            <div class="card-header">
+                <div class="node-title" style="font-size:1.2rem;color:#aaa">System Events</div>
+                <div class="convert-controls">
+                    <button onclick="clearLog()" style="background:transparent;border:1px solid #444;color:#888;padding:4px 8px;border-radius:4px;cursor:pointer">Clear</button>
+                </div>
+            </div>
+            <div class="log-container" id="sysLog">
+                <div class="log-entry">Waiting for events...</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Configuration
+        const BROKER_URL = 'wss://broker.hivemq.com:8884/mqtt';
+        const TOPIC_PREFIX = 'watergrid_shubham2026'; // Root topic
+
+        // UI References
+        const ui = {
+            connStatus: document.getElementById('connStatus'),
+            connText: document.getElementById('connText'),
+            log: document.getElementById('sysLog'),
+            nodes: {
+                A: {
+                    card: document.getElementById('cardA'),
+                    state: document.getElementById('stateA'),
+                    fill: document.getElementById('fillA'),
+                    lvl: document.getElementById('lvlA'),
+                    p1_led: document.getElementById('p1A_led'),
+                    p1_txt: document.getElementById('p1A_txt'),
+                    p2_led: document.getElementById('p2A_led'),
+                    p2_txt: document.getElementById('p2A_txt'),
+                    cur: document.getElementById('curA'),
+                    last: document.getElementById('lastA')
+                },
+                B: {
+                    card: document.getElementById('cardB'),
+                    state: document.getElementById('stateB'),
+                    fill: document.getElementById('fillB'),
+                    lvl: document.getElementById('lvlB'),
+                    p1_led: document.getElementById('p1B_led'),
+                    p1_txt: document.getElementById('p1B_txt'),
+                    p2_led: document.getElementById('p2B_led'),
+                    p2_txt: document.getElementById('p2B_txt'),
+                    cur: document.getElementById('curB'),
+                    last: document.getElementById('lastB')
+                }
+            }
+        };
+
+        // Connect to MQTT Broker
+        const client = mqtt.connect(BROKER_URL, {
+            clientId: 'dash_' + Math.random().toString(16).substring(2, 8),
+            clean: true,
+            reconnectPeriod: 2000
+        });
+
+        // Connection Handlers
+        client.on('connect', () => {
+            console.log('Connected to Broker');
+            ui.connStatus.classList.add('connected');
+            ui.connText.innerText = 'Connected via WSS';
+            
+            // Subscribe to all relevant topics
+            client.subscribe(TOPIC_PREFIX + '/+/status');  // Telemetry
+            client.subscribe(TOPIC_PREFIX + '/request');   // Events
+            client.subscribe(TOPIC_PREFIX + '/response');  // Events
+            log('System', 'Connected to MQTT Broker');
+        });
+
+        client.on('close', () => {
+            ui.connStatus.classList.remove('connected');
+            ui.connText.innerText = 'Disconnected';
+        });
+
+        client.on('error', (err) => {
+            console.error('MQTT Error:', err);
+            log('System', 'Connection Error: ' + err.message);
+        });
+
+        // Message Handler
+        client.on('message', (topic, message) => {
+            const msgStr = message.toString();
+            console.log(topic, msgStr);
+
+            try {
+                const data = JSON.parse(msgStr);
+                
+                // Route message based on topic pattern
+                if (topic.includes('/status')) {
+                    // Extract Node ID from "watergrid_shubham2026/nodeA/status"
+                    const nodeID = topic.split('/')[1].replace('node', ''); 
+                    updateNodeUI(nodeID, data);
+                } 
+                else if (topic.includes('/request')) {
+                    log('Request', `Node ${data.from} Needs ${data.need.toFixed(1)}L (Lvl: ${data.level}%)`);
+                }
+                else if (topic.includes('/response')) {
+                    const status = data.accepted ? 'Accepted' : 'Denied';
+                    log('Response', `Node ${data.from} -> ${data.to}: ${status} (${data.amount.toFixed(1)}L)`);
+                }
+
+            } catch (e) {
+                console.warn('Invalid JSON:', msgStr);
+            }
+        });
+
+        // Update UI Function
+        function updateNodeUI(id, data) {
+            const node = ui.nodes[id];
+            if (!node) return;
+
+            // Update Tank Level
+            const pct = Math.max(0, Math.min(100, data.level_pct));
+            node.fill.style.height = pct + '%';
+            node.lvl.innerText = pct.toFixed(1);
+
+            // Conditional Coloring for Level
+            if (pct < 20) node.fill.style.background = 'var(--danger)'; // Low
+            else if (pct < 40) node.fill.style.background = 'var(--warning)'; // Warning
+            else node.fill.style.background = 'linear-gradient(to top, var(--primary), var(--secondary))'; // Good
+
+            // Update State Badge
+            node.state.innerText = data.state;
+            
+            // State Coloring
+            node.state.style.color = '#aaa';
+            if (data.state === 'SUPPLYING') node.state.style.color = 'var(--success)';
+            if (data.state === 'RECEIVING') node.state.style.color = 'var(--secondary)';
+            if (data.state === 'REQUESTING') node.state.style.color = 'var(--warning)';
+            if (data.state === 'DRY_RUN_FAULT') node.state.style.color = 'var(--danger)';
+
+            // Pump 1 Logic
+            const p1On = (data.pump1 === 'on');
+            node.p1_led.className = 'pump-led' + (p1On ? ' pump-on' : '');
+            node.p1_txt.innerText = p1On ? 'ON' : 'OFF';
+
+            // Pump 2 Logic (Backup)
+            const p2On = (data.pump2 === 'on');
+            node.p2_led.className = 'pump-led' + (p2On ? ' pump-fault' : ''); // Red glow for backup
+            node.p2_txt.innerText = p2On ? 'ACTIVE' : 'OFF';
+
+            // Fault Banner
+            if (data.fault) {
+                node.card.classList.add('fault');
+            } else {
+                node.card.classList.remove('fault');
+            }
+
+            // Current
+            node.cur.innerText = data.pump1_current_mA + ' mA';
+
+            // Timestamp
+            node.last.innerText = new Date().toLocaleTimeString();
+        }
+
+        // Logger Function
+        function log(type, msg) {
+            const row = document.createElement('div');
+            row.className = 'log-entry';
+            const time = new Date().toLocaleTimeString();
+            row.innerHTML = `<span class="log-ts">[${time}]</span><span class="log-topic">${type}:</span> ${msg}`;
+            ui.log.prepend(row);
+            
+            // Clean up old logs
+            if (ui.log.children.length > 50) {
+                ui.log.removeChild(ui.log.lastChild);
+            }
+        }
+
+        function clearLog() {
+            ui.log.innerHTML = '';
+        }
+
+    </script>
+</body>
+</html>

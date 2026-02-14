@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "author": "Antigravity",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-lcd1602", "id": "lcd1", "top": -145.6, "left": 136, "attrs": { "pins": "i2c" } },
+    { "type": "wokwi-potentiometer", "id": "pot1", "top": 122.2, "left": 161.4, "attrs": { "max": "4095" } },
+    { "type": "wokwi-potentiometer", "id": "pot2", "top": 218.2, "left": 161.4, "attrs": { "max": "4095" } },
+    { "type": "wokwi-led", "id": "led1", "top": 63.6, "left": 176.6, "attrs": { "color": "blue", "label": "MAIN PUMP" } },
+    { "type": "wokwi-led", "id": "led2", "top": 300, "left": 176.6, "attrs": { "color": "red", "label": "BACKUP PUMP" } },
+    { "type": "wokwi-resistor", "id": "r1", "top": 110.4, "left": 230.4, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r2", "top": 346.8, "left": 230.4, "attrs": { "value": "220" } }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    [ "esp:21", "lcd1:SDA", "green", [ "v0" ] ],
+    [ "esp:22", "lcd1:SCL", "cyan", [ "v0" ] ],
+    [ "esp:GND.2", "lcd1:GND", "black", [ "h-19.2", "v-86.4" ] ],
+    [ "esp:5V", "lcd1:VCC", "red", [ "h-9.6", "v-76.8" ] ],
+    [ "pot1:GND", "esp:GND.1", "black", [ "v0" ] ],
+    [ "pot1:VCC", "esp:3V3", "red", [ "v0" ] ],
+    [ "pot1:SIG", "esp:34", "purple", [ "v0" ] ],
+    [ "pot2:GND", "esp:GND.1", "black", [ "v0" ] ],
+    [ "pot2:VCC", "esp:3V3", "red", [ "v0" ] ],
+    [ "pot2:SIG", "esp:35", "orange", [ "v0" ] ],
+    [ "esp:26", "led1:A", "green", [ "v0" ] ],
+    [ "led1:C", "r1:1", "black", [ "v0" ] ],
+    [ "r1:2", "esp:GND.2", "black", [ "v0" ] ],
+    [ "esp:27", "led2:A", "yellow", [ "v0" ] ],
+    [ "led2:C", "r2:1", "black", [ "v0" ] ],
+    [ "r2:2", "esp:GND.2", "black", [ "v0" ] ]
+  ],
+  "dependencies": {}
+}
