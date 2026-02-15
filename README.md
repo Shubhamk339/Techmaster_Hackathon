@@ -8,7 +8,8 @@
 ## 👨‍💻 Developers: Team Techmaster
 *   **Shubham Kulkarni** - *Lead Developer & Architect*
 *   **Vedant Dadhe** - *System Integration & Logic Design*
-
+*   **Soham Deshmukh** - *Market Analysis and Research*
+  
 ---
 
 ## 🚀 Project Overview
@@ -114,3 +115,4 @@ We use a lightweight, structured JSON payload for all communications to ensure e
 
 ---
 *Built with ❤️ for **Swalambh Hackathon 2026***
+
